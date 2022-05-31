@@ -1,10 +1,18 @@
 package ezcli
 
-const (
-	tagIgnore = "-"
-	tagEnv    = "env="
+import (
+	"reflect"
 )
 
-func parseTags(tags string) Option {
+const (
+	tagEnv = "env"
+)
 
+func parseTags(field reflect.StructField) []CommandOptions {
+	val, exists := field.Tag.Lookup(tagEnv)
+	if exists {
+		_ = val
+	}
+	_ = val
+	return make([]CommandOptions, 0)
 }

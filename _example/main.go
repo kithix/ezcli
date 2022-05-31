@@ -8,7 +8,8 @@ import (
 )
 
 type config struct {
-	Vbool     bool `ezcli:"env"`
+	// Expect env to automatically capitalise
+	Vbool     bool `ezcli:"name" env:"not_bOOL"`
 	Vint      int
 	Vstring   string
 	Vduration string
@@ -46,6 +47,7 @@ func do(cmd *cobra.Command, args []string) {
 }
 
 func init() {
+	root.Cmd.Version = "1.0.2"
 	// Global configs
 	root.BoolVar(&conf.Vbool, "dabool", true, "this is a bool")
 	root.IntVar(&conf.Vint, "daint", 5, "this is an int")
@@ -64,7 +66,6 @@ func init() {
 }
 
 func main() {
-	log.Println("running main")
 	err := root.Execute()
 	if err != nil {
 		log.Fatal(err)

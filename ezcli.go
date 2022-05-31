@@ -3,7 +3,6 @@ package ezcli
 import (
 	"fmt"
 	"os"
-	"reflect"
 	"time"
 
 	"github.com/mitchellh/go-homedir"
@@ -11,15 +10,16 @@ import (
 	"github.com/spf13/viper"
 )
 
+type Run func(cmd *cobra.Command, args []string)
+
 type App struct {
-	cmd           *cobra.Command
-	configName    string
+	Cmd           *cobra.Command
 	postLoadFuncs []func()
 }
 
-func New(name, short, long string, run func(cmd *cobra.Command, args []string)) *App {
-	return &App{
-		cmd: &cobra.Command{
+func New(name, short, long string, run Run) *App {
+	a := &App{
+		Cmd: &cobra.Command{
 			Use:   name,
 			Short: short,
 			Long:  long,
@@ -27,65 +27,48 @@ func New(name, short, long string, run func(cmd *cobra.Command, args []string)) 
 		},
 		postLoadFuncs: make([]func(), 0),
 	}
+
+	return a
 }
 
 func (app *App) Child(child *App) *App {
-	app.cmd.AddCommand(child.cmd)
+	app.Cmd.AddCommand(child.Cmd)
 	return child
 }
 
 func (app *App) StringVar(variable *string, name, value, usage string) {
-	app.cmd.PersistentFlags().StringVar(variable, name, value, usage)
-	bindFlagAndConfig(app.cmd, name)
+	app.Cmd.PersistentFlags().StringVar(variable, name, value, usage)
+	bindFlagAndConfig(app.Cmd, name)
 	app.postLoadFuncs = append(app.postLoadFuncs, func() {
 		*variable = viper.GetString(name)
 	})
 }
 
 func (app *App) IntVar(variable *int, name string, value int, usage string) {
-	app.cmd.PersistentFlags().IntVar(variable, name, value, usage)
-	bindFlagAndConfig(app.cmd, name)
+	app.Cmd.PersistentFlags().IntVar(variable, name, value, usage)
+	bindFlagAndConfig(app.Cmd, name)
 	app.postLoadFuncs = append(app.postLoadFuncs, func() {
 		*variable = viper.GetInt(name)
 	})
 }
 
 func (app *App) DurationVar(variable *time.Duration, name string, value time.Duration, usage string) {
-	app.cmd.PersistentFlags().DurationVar(variable, name, value, usage)
-	bindFlagAndConfig(app.cmd, name)
+	app.Cmd.PersistentFlags().DurationVar(variable, name, value, usage)
+	bindFlagAndConfig(app.Cmd, name)
 	app.postLoadFuncs = append(app.postLoadFuncs, func() {
 		*variable = viper.GetDuration(name)
 	})
 }
 
 func (app *App) BoolVar(variable *bool, name string, value bool, usage string) {
-	app.cmd.PersistentFlags().BoolVar(variable, name, value, usage)
-	bindFlagAndConfig(app.cmd, name)
+	// Flags vs PersistentFlags
+	// Persists stays true for all sub commands
+	// Non-persists is only for the exact command
+	app.Cmd.PersistentFlags().BoolVar(variable, name, value, usage)
+	bindFlagAndConfig(app.Cmd, name)
 	app.postLoadFuncs = append(app.postLoadFuncs, func() {
 		*variable = viper.GetBool(name)
 	})
-}
-
-// TODO options
-func (app *App) StructVar(s interface{}) {
-	// Must be a pointer
-	t := reflect.TypeOf(s)
-	fmt.Println(t.Name())
-	fmt.Println(t.Kind())
-
-	t = t.Elem()
-	fmt.Println(t.Name())
-	fmt.Println(t.Kind())
-	// Iterate over all available fields and read the tag value
-	for i := 0; i < t.NumField(); i++ {
-		// Get the field, returns https://golang.org/pkg/reflect/#StructField
-		field := t.Field(i)
-
-		// Get the field tag value
-		tag := field.Tag.Get("ezcli")
-
-		fmt.Printf("%d. %v (%v), tag: '%v'\n", i+1, field.Name, field.Type.Name(), tag)
-	}
 }
 
 func (app *App) Init(pathToConfigFile, configName string) {
@@ -124,7 +107,7 @@ func (app *App) initConfig(pathToConfigFile, configName string) func() {
 }
 
 func (app *App) Execute() error {
-	return app.cmd.Execute()
+	return app.Cmd.Execute()
 }
 
 func bindFlagAndConfig(cmd *cobra.Command, names ...string) {
