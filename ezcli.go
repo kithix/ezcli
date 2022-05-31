@@ -3,6 +3,7 @@ package ezcli
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/mitchellh/go-homedir"
@@ -28,8 +29,9 @@ func New(name, short, long string, run func(cmd *cobra.Command, args []string)) 
 	}
 }
 
-func (app *App) Child(child *App) {
+func (app *App) Child(child *App) *App {
 	app.cmd.AddCommand(child.cmd)
+	return child
 }
 
 func (app *App) StringVar(variable *string, name, value, usage string) {
@@ -62,6 +64,28 @@ func (app *App) BoolVar(variable *bool, name string, value bool, usage string) {
 	app.postLoadFuncs = append(app.postLoadFuncs, func() {
 		*variable = viper.GetBool(name)
 	})
+}
+
+// TODO options
+func (app *App) StructVar(s interface{}) {
+	// Must be a pointer
+	t := reflect.TypeOf(s)
+	fmt.Println(t.Name())
+	fmt.Println(t.Kind())
+
+	t = t.Elem()
+	fmt.Println(t.Name())
+	fmt.Println(t.Kind())
+	// Iterate over all available fields and read the tag value
+	for i := 0; i < t.NumField(); i++ {
+		// Get the field, returns https://golang.org/pkg/reflect/#StructField
+		field := t.Field(i)
+
+		// Get the field tag value
+		tag := field.Tag.Get("ezcli")
+
+		fmt.Printf("%d. %v (%v), tag: '%v'\n", i+1, field.Name, field.Type.Name(), tag)
+	}
 }
 
 func (app *App) Init(pathToConfigFile, configName string) {
