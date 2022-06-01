@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/kithix/ezcli"
 	"github.com/spf13/cobra"
@@ -9,35 +10,36 @@ import (
 
 type config struct {
 	// Expect env to automatically capitalise
-	Vbool     bool `ezcli:"name" env:"not_bOOL"`
-	Vint      int
-	Vstring   string
-	Vduration string
+	Bool        bool `flag:"name"`
+	Int         int  `env:"nOt_Int"`
+	String      string
+	Duration    time.Duration
+	SliceString []string
 }
 
 var conf = &config{}
-var root = ezcli.New(
-	"root",
-	"just a root command",
-	"just a longer root command description",
-	do,
-)
+var root = ezcli.New(&cobra.Command{
+	Use:   "root",
+	Short: "just a root command",
+	Long:  "just a longer root command description",
+	Run:   do,
+})
 
 var subconf = &config{}
-var subcmd = root.Child(ezcli.New(
-	"subcmd",
-	"look a subcmd",
-	"just a longer sub command description",
-	do,
-))
+var subcmd = root.Child(ezcli.New(&cobra.Command{
+	Use:   "subcmd",
+	Short: "look a subcmd",
+	Long:  "just a longer sub command description",
+	Run:   do,
+}))
 
 var subsubconf = &config{}
-var subsubcmd = subcmd.Child(ezcli.New(
-	"subsubcmd",
-	"look a subsubcmd",
-	"just a longer subsub command description",
-	do,
-))
+var subsubcmd = subcmd.Child(ezcli.New(&cobra.Command{
+	Use:   "subsubcmd",
+	Short: "look a subsubcmd",
+	Long:  "just a longer subsub command description",
+	Run:   do,
+}))
 
 func do(cmd *cobra.Command, args []string) {
 	log.Println(args)
@@ -48,18 +50,19 @@ func do(cmd *cobra.Command, args []string) {
 
 func init() {
 	root.Cmd.Version = "1.0.2"
-	// Global configs
-	root.BoolVar(&conf.Vbool, "dabool", true, "this is a bool")
-	root.IntVar(&conf.Vint, "daint", 5, "this is an int")
-	root.StringVar(&conf.Vstring, "dastring", "apples", "this is an int")
-
 	root.StructVar(conf)
+	// Global configs
+	root.BoolVar(&conf.Bool, "dabool", true, "this is a bool")
+	root.IntVar(&conf.Int, "daint", 5, "this is an int")
+	root.StringVar(&conf.String, "dastring", "apples", "this is an int")
+
+	root.Var(&conf.SliceString, "daslicestring", []string{"apples"}, "this is an int")
 
 	// Inherits from root
-	subcmd.BoolVar(&subconf.Vbool, "subbool", false, "sub bool")
+	subcmd.BoolVar(&subconf.Bool, "subbool", false, "sub bool")
 
 	// Inherits from subcmd and root
-	subsubcmd.BoolVar(&subsubconf.Vbool, "subsubbool", false, "sub sub bool")
+	subsubcmd.BoolVar(&subsubconf.Bool, "subsubbool", false, "sub sub bool")
 
 	// init
 	root.Init("", ".root")

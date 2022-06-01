@@ -1,44 +1,94 @@
 package ezcli
 
 import (
-	"fmt"
 	"reflect"
-	"strings"
 )
 
-// TODO options
-func (app *App) StructVar(s interface{}) {
-	t := reflect.TypeOf(s)
-	if t.Kind() != reflect.Pointer {
-		panic("must be a pointer to a struct")
+const (
+	tagEnv  = "env"
+	tagFlag = "flag"
+)
+
+func (a *App) parseTags(field reflect.StructField) []varOptFn {
+	varOptFns := make([]varOptFn, 0)
+
+	envVal, exists := field.Tag.Lookup(tagEnv)
+	if exists {
+		// Use the field name if there was no custom name provided
+		if envVal == "" {
+			envVal = field.Name
+		}
+		varOptFns = append(varOptFns, VarEnv(envVal))
 	}
-	// Get the value of the pointer
-	t = t.Elem()
-	if t.Kind() != reflect.Struct {
-		panic("must be a pointer to a struct")
+	flagVal, exists := field.Tag.Lookup(tagFlag)
+	if exists && flagVal != "" {
+		varOptFns = append(varOptFns, VarName(flagVal))
+	} else {
+		// default to the field name if we have no value
+		varOptFns = append(varOptFns, VarName(field.Name))
+	}
+
+	return varOptFns
+}
+
+func (a *App) StructVar(s any) {
+	sType := reflect.TypeOf(s)
+	sVal := reflect.ValueOf(s)
+	// Get the value of any pointers
+	if sType.Kind() == reflect.Pointer {
+		sType = sType.Elem()
+		sVal = sVal.Elem()
+	}
+	if sType.Kind() != reflect.Struct {
+		panic("Must iterate over fields of a struct")
 	}
 
 	// Iterate over all available fields and read the tag value
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-		// How to handle nested structs? Recursively for sure :partyparrot:
-		// if field.Type == reflect.Struct {
-		// 	app.StructVar(field)
-		//}
+	for i := 0; i < sType.NumField(); i++ {
+		fType := sType.Field(i)
+		fVal := sVal.Field(i)
 
-		// Get the field tag value
-		fmt.Printf("%+v\n", field)
-		tag := field.Tag.Get("ezcli")
-		if tag == "" {
-			// default
+		// Skip any unexported or anonymous fields
+		if !fType.IsExported() {
 			continue
 		}
-		subtags := strings.Split(tag, ",")
-		for _, subtag := range subtags {
-			_ = subtag
+
+		// Recurse over structs
+		if fType.Type.Kind() == reflect.Struct {
+			a.StructVar(fVal)
+			continue
 		}
+
+		// Parse the tags as options
+		optFns := a.parseTags(fType)
+
+		// Use our structs set value as the default
+		optFns = append(optFns, VarDefaultValue(fVal.Interface()))
+
+		// Get the value out of the field
+		switch fType.Type.String() {
+		case "bool":
+			v := fVal.Bool()
+			a.genericVar(&v, optFns...)
+			a.postLoadFuncs = append(a.postLoadFuncs, func() {
+				fVal.SetBool(v)
+			})
+		case "int":
+			v := int(fVal.Int())
+			a.genericVar(&v, optFns...)
+			a.postLoadFuncs = append(a.postLoadFuncs, func() {
+				fVal.SetInt(int64(v))
+			})
+		case "string":
+			v := fVal.String()
+			a.genericVar(&v, optFns...)
+			a.postLoadFuncs = append(a.postLoadFuncs, func() {
+				fVal.SetString(v)
+			})
+		default:
+			// Do we skip struct values we can't use?
+			// Maybe make it an option?
+		}
+
 	}
 }
