@@ -2,6 +2,7 @@ package ezcli
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"strings"
@@ -51,7 +52,7 @@ func (a *App) Var(variable any, name string, value any, usage string) {
 	a.genericVar(variable, VarName(name), VarDefaultValue(value), VarUsage(usage))
 }
 
-func (a *App) genericVar(variable any, optFns ...varOptFn) {
+func (a *App) genericVar(v any, optFns ...varOptFn) {
 	// Setup our variable options
 	opts := defaultOpts()
 	for _, optFn := range optFns {
@@ -68,13 +69,15 @@ func (a *App) genericVar(variable any, optFns ...varOptFn) {
 		flagSet = a.Cmd.PersistentFlags()
 	}
 
-	typeOf := reflect.TypeOf(variable)
+	typeOf := reflect.TypeOf(v)
 	// We must have a pointer before continuing
 	if typeOf.Kind() != reflect.Pointer {
 		panic(fmt.Sprintf("Type must be a pointer, got %s:", typeOf))
 	}
-	// Get the
+	// Get the value of the pointer
 	elem := typeOf.Elem()
+	// TODO should we panic if it's a pointer here?
+
 	// Ensure we have a zero'd value for our type
 	if opts.DefaultValue == nil {
 		opts.DefaultValue = reflect.Zero(elem).Interface()
@@ -85,30 +88,37 @@ func (a *App) genericVar(variable any, optFns ...varOptFn) {
 	switch elem.String() {
 	// TODO Could we and should we allow type aliases from users?
 	case "bool":
-		flagSet.BoolVar(variable.(*bool), opts.Name, opts.DefaultValue.(bool), opts.Usage)
-		postLoadFunc = func() { variable = viper.GetBool(opts.Name) }
+		flagSet.BoolVar(v.(*bool), opts.Name, opts.DefaultValue.(bool), opts.Usage)
+		postLoadFunc = func() { v = viper.GetBool(opts.Name) }
 
 	case "int":
-		flagSet.IntVar(variable.(*int), opts.Name, opts.DefaultValue.(int), opts.Usage)
-		postLoadFunc = func() { variable = viper.GetInt(opts.Name) }
+		flagSet.IntVar(v.(*int), opts.Name, opts.DefaultValue.(int), opts.Usage)
+		postLoadFunc = func() { v = viper.GetInt(opts.Name) }
+
+	case "net.IP":
+		flagSet.IPVar(v.(*net.IP), opts.Name, opts.DefaultValue.(net.IP), opts.Usage)
+		postLoadFunc = func() {
+			ipString := viper.GetString(opts.Name)
+			v = net.ParseIP(ipString)
+		}
 
 	case "string":
-		flagSet.StringVar(variable.(*string), opts.Name, opts.DefaultValue.(string), opts.Usage)
-		postLoadFunc = func() { variable = viper.GetString(opts.Name) }
+		flagSet.StringVar(v.(*string), opts.Name, opts.DefaultValue.(string), opts.Usage)
+		postLoadFunc = func() { v = viper.Get(opts.Name).(string) }
 
 	case "[]string":
-		flagSet.StringSliceVar(variable.(*[]string), opts.Name, opts.DefaultValue.([]string), opts.Usage)
-		postLoadFunc = func() { variable = viper.GetStringSlice(opts.Name) }
+		flagSet.StringSliceVar(v.(*[]string), opts.Name, opts.DefaultValue.([]string), opts.Usage)
+		postLoadFunc = func() { v = viper.GetStringSlice(opts.Name) }
 
 	case "time.Duration":
-		flagSet.DurationVar(variable.(*time.Duration), opts.Name, opts.DefaultValue.(time.Duration), opts.Usage)
-		postLoadFunc = func() { variable = viper.GetDuration(opts.Name) }
+		flagSet.DurationVar(v.(*time.Duration), opts.Name, opts.DefaultValue.(time.Duration), opts.Usage)
+		postLoadFunc = func() { v = viper.GetDuration(opts.Name) }
 
 	case "[]time.Duration":
-		flagSet.DurationSliceVar(variable.(*[]time.Duration), opts.Name, opts.DefaultValue.([]time.Duration), opts.Usage)
+		flagSet.DurationSliceVar(v.(*[]time.Duration), opts.Name, opts.DefaultValue.([]time.Duration), opts.Usage)
 		postLoadFunc = func() {
 			// Format of: [durationString,durationString]
-			durationSliceAsString := viper.Get(opts.Name).(string)
+			durationSliceAsString := viper.GetString(opts.Name)
 			// Remove the brackets and split on the commas
 			durationStrings := strings.Split(durationSliceAsString[1:len(durationSliceAsString)-1], ",")
 			// Populate our slice with the duration values
@@ -120,9 +130,11 @@ func (a *App) genericVar(variable any, optFns ...varOptFn) {
 				}
 				durations[i] = d
 			}
-			variable = durations
+			v = durations
 		}
 	default:
+		// TODO how to handle aliases of base types?
+		// Should we even do this?
 		panic(fmt.Sprintf("unable to use variable type %s", elem))
 	}
 
@@ -133,8 +145,18 @@ func (a *App) genericVar(variable any, optFns ...varOptFn) {
 	viper.BindPFlag(opts.Name, flagSet.Lookup(opts.Name))
 }
 
-func (app *App) Init(pathToConfigFile, configName string) {
-	cobra.OnInitialize(app.initConfig(pathToConfigFile, configName))
+// func varKind[T any](flagSet *pflag.FlagSet, elem reflect.Type, variable any, opts *VarOpts) func() {
+// 	switch elem.Kind() {
+// 	case reflect.String:
+// 		flagSet.StringVar(variable.(*string), opts.Name, opts.DefaultValue.(string), opts.Usage)
+// 		return func() { variable = viper.Get(opts.Name).(T) }
+// 	default:
+// 		panic(fmt.Sprintf("unable to use variable type %s", elem))
+// 	}
+// }
+
+func (a *App) Init(pathToConfigFile, configName string) {
+	cobra.OnInitialize(a.initConfig(pathToConfigFile, configName))
 }
 
 func (a *App) initConfig(pathToConfigFile, configName string) func() {
