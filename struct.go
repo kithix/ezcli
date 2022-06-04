@@ -65,30 +65,65 @@ func (a *App) StructVar(s any) {
 		// Use our structs set value as the default
 		optFns = append(optFns, VarDefaultValue(fVal.Interface()))
 
-		// Get the value out of the field
-		switch fType.Type.String() {
-		case "bool":
+		switch fType.Type.Kind() {
+		case reflect.Bool:
 			v := fVal.Bool()
 			a.genericVar(&v, optFns...)
 			a.postLoadFuncs = append(a.postLoadFuncs, func() {
 				fVal.SetBool(v)
 			})
-		case "int":
-			v := int(fVal.Int())
-			a.genericVar(&v, optFns...)
-			a.postLoadFuncs = append(a.postLoadFuncs, func() {
-				fVal.SetInt(int64(v))
-			})
-		case "string":
+
+		// Handle ints
+		case reflect.Int:
+			setInt[int](a, fVal, optFns)
+		case reflect.Int8:
+			setInt[int8](a, fVal, optFns)
+		case reflect.Int16:
+			setInt[int16](a, fVal, optFns)
+		case reflect.Int32:
+			setInt[int32](a, fVal, optFns)
+		case reflect.Int64:
+			setInt[int64](a, fVal, optFns)
+
+		// Handle uints
+		case reflect.Uint:
+			setUint[uint](a, fVal, optFns)
+		case reflect.Uint8:
+			setUint[uint8](a, fVal, optFns)
+		case reflect.Uint16:
+			setUint[uint16](a, fVal, optFns)
+		case reflect.Uint32:
+			setUint[uint32](a, fVal, optFns)
+		case reflect.Uint64:
+			setUint[uint64](a, fVal, optFns)
+
+		case reflect.String:
 			v := fVal.String()
 			a.genericVar(&v, optFns...)
 			a.postLoadFuncs = append(a.postLoadFuncs, func() {
 				fVal.SetString(v)
 			})
 		default:
+			panic("unable to use struct value")
 			// Do we skip struct values we can't use?
 			// Maybe make it an option?
 		}
 
 	}
+}
+
+func setUint[T uint | uint8 | uint16 | uint32 | uint64](a *App, val reflect.Value, optFns []varOptFn) {
+	v := T(val.Uint())
+	a.genericVar(&v, optFns...)
+	a.postLoadFuncs = append(a.postLoadFuncs, func() {
+		val.SetUint(uint64(v))
+	})
+}
+
+func setInt[T int | int8 | int16 | int32 | int64](a *App, val reflect.Value, optFns []varOptFn) {
+	v := T(val.Int())
+	a.genericVar(&v, optFns...)
+	a.postLoadFuncs = append(a.postLoadFuncs, func() {
+		val.SetInt(int64(v))
+	})
 }

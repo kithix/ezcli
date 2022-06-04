@@ -54,7 +54,19 @@ func TestApp_Vars(t *testing.T) {
 	// Single values
 	doGVarTest[bool](t, "true", true)
 	doGVarTest[string](t, "testString", "testString")
+
 	doGVarTest[int](t, "1337", 1337)
+	doGVarTest[int8](t, "16", 16)
+	doGVarTest[int16](t, "3200", 3200)
+	doGVarTest[int32](t, "5678123", 5678123)
+	doGVarTest[int64](t, "1234567890", 1234567890)
+
+	doGVarTest[uint](t, "7331", 7331)
+	doGVarTest[uint8](t, "32", 32)
+	doGVarTest[uint16](t, "2509", 2509)
+	doGVarTest[uint32](t, "8123567", 8123567)
+	doGVarTest[uint64](t, "10987654321", 10987654321)
+
 	doGVarTest[time.Duration](t, "5s", 5*time.Second)
 	doGVarTest[net.IP](t, "127.0.0.1", net.IPv4(127, 0, 0, 1))
 	doGVarTest[net.IP](t, "ff02::1", net.IPv6linklocalallnodes)

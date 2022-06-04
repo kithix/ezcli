@@ -95,6 +95,42 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 		flagSet.IntVar(v.(*int), opts.Name, opts.DefaultValue.(int), opts.Usage)
 		postLoadFunc = func() { v = viper.GetInt(opts.Name) }
 
+	case "int8":
+		flagSet.Int8Var(v.(*int8), opts.Name, opts.DefaultValue.(int8), opts.Usage)
+		postLoadFunc = func() { v = int8(viper.GetInt(opts.Name)) }
+
+	case "int16":
+		flagSet.Int16Var(v.(*int16), opts.Name, opts.DefaultValue.(int16), opts.Usage)
+		postLoadFunc = func() { v = int16(viper.GetInt(opts.Name)) }
+
+	case "int32":
+		flagSet.Int32Var(v.(*int32), opts.Name, opts.DefaultValue.(int32), opts.Usage)
+		postLoadFunc = func() { v = viper.GetInt32(opts.Name) }
+
+	case "int64":
+		flagSet.Int64Var(v.(*int64), opts.Name, opts.DefaultValue.(int64), opts.Usage)
+		postLoadFunc = func() { v = viper.GetInt64(opts.Name) }
+
+	case "uint":
+		flagSet.UintVar(v.(*uint), opts.Name, opts.DefaultValue.(uint), opts.Usage)
+		postLoadFunc = func() { v = viper.GetInt(opts.Name) }
+
+	case "uint8":
+		flagSet.Uint8Var(v.(*uint8), opts.Name, opts.DefaultValue.(uint8), opts.Usage)
+		postLoadFunc = func() { v = uint8(viper.GetUint(opts.Name)) }
+
+	case "uint16":
+		flagSet.Uint16Var(v.(*uint16), opts.Name, opts.DefaultValue.(uint16), opts.Usage)
+		postLoadFunc = func() { v = uint16(viper.GetUint(opts.Name)) }
+
+	case "uint32":
+		flagSet.Uint32Var(v.(*uint32), opts.Name, opts.DefaultValue.(uint32), opts.Usage)
+		postLoadFunc = func() { v = viper.GetUint32(opts.Name) }
+
+	case "uint64":
+		flagSet.Uint64Var(v.(*uint64), opts.Name, opts.DefaultValue.(uint64), opts.Usage)
+		postLoadFunc = func() { v = viper.GetUint64(opts.Name) }
+
 	case "net.IP":
 		flagSet.IPVar(v.(*net.IP), opts.Name, opts.DefaultValue.(net.IP), opts.Usage)
 		postLoadFunc = func() {
@@ -144,16 +180,6 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 	// Bind the cobra flag to Viper for configuration file and environment mapping
 	viper.BindPFlag(opts.Name, flagSet.Lookup(opts.Name))
 }
-
-// func varKind[T any](flagSet *pflag.FlagSet, elem reflect.Type, variable any, opts *VarOpts) func() {
-// 	switch elem.Kind() {
-// 	case reflect.String:
-// 		flagSet.StringVar(variable.(*string), opts.Name, opts.DefaultValue.(string), opts.Usage)
-// 		return func() { variable = viper.Get(opts.Name).(T) }
-// 	default:
-// 		panic(fmt.Sprintf("unable to use variable type %s", elem))
-// 	}
-// }
 
 func (a *App) Init(pathToConfigFile, configName string) {
 	cobra.OnInitialize(a.initConfig(pathToConfigFile, configName))
