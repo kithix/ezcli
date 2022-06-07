@@ -15,12 +15,14 @@ import (
 
 type App struct {
 	Cmd           *cobra.Command
+	Viper         *viper.Viper
 	postLoadFuncs []func()
 }
 
 func New(cmd *cobra.Command) *App {
 	a := &App{
 		Cmd:           cmd,
+		Viper:         viper.New(),
 		postLoadFuncs: make([]func(), 0),
 	}
 
@@ -72,11 +74,16 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 	typeOf := reflect.TypeOf(v)
 	// We must have a pointer before continuing
 	if typeOf.Kind() != reflect.Pointer {
-		panic(fmt.Sprintf("Type must be a pointer, got %s:", typeOf))
+		panic(fmt.Sprintf("type must be a pointer, got %s:", typeOf))
 	}
 	// Get the value of the pointer
 	elem := typeOf.Elem()
 	// TODO should we panic if it's a pointer here?
+	if elem.Kind() == reflect.Pointer {
+		panic("unable to service a pointer to a pointer")
+	}
+	// Get the value out so we can set it later
+	val := reflect.ValueOf(v).Elem()
 
 	// Ensure we have a zero'd value for our type
 	if opts.DefaultValue == nil {
@@ -84,77 +91,79 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 	}
 
 	var postLoadFunc func()
+
 	// Set the flag for the kind of data
 	switch elem.String() {
 	// TODO Could we and should we allow type aliases from users?
 	case "bool":
 		flagSet.BoolVar(v.(*bool), opts.Name, opts.DefaultValue.(bool), opts.Usage)
-		postLoadFunc = func() { v = viper.GetBool(opts.Name) }
+		postLoadFunc = func() { val.SetBool(a.Viper.GetBool(opts.Name)) }
 
 	case "int":
 		flagSet.IntVar(v.(*int), opts.Name, opts.DefaultValue.(int), opts.Usage)
-		postLoadFunc = func() { v = viper.GetInt(opts.Name) }
+		postLoadFunc = func() { val.SetInt(a.Viper.GetInt64(opts.Name)) }
 
 	case "int8":
 		flagSet.Int8Var(v.(*int8), opts.Name, opts.DefaultValue.(int8), opts.Usage)
-		postLoadFunc = func() { v = int8(viper.GetInt(opts.Name)) }
+		postLoadFunc = func() { val.SetInt(a.Viper.GetInt64(opts.Name)) }
 
 	case "int16":
 		flagSet.Int16Var(v.(*int16), opts.Name, opts.DefaultValue.(int16), opts.Usage)
-		postLoadFunc = func() { v = int16(viper.GetInt(opts.Name)) }
+		postLoadFunc = func() { val.SetInt(a.Viper.GetInt64(opts.Name)) }
 
 	case "int32":
 		flagSet.Int32Var(v.(*int32), opts.Name, opts.DefaultValue.(int32), opts.Usage)
-		postLoadFunc = func() { v = viper.GetInt32(opts.Name) }
+		postLoadFunc = func() { val.SetInt(a.Viper.GetInt64(opts.Name)) }
 
 	case "int64":
 		flagSet.Int64Var(v.(*int64), opts.Name, opts.DefaultValue.(int64), opts.Usage)
-		postLoadFunc = func() { v = viper.GetInt64(opts.Name) }
+		postLoadFunc = func() { val.SetInt(a.Viper.GetInt64(opts.Name)) }
 
 	case "uint":
 		flagSet.UintVar(v.(*uint), opts.Name, opts.DefaultValue.(uint), opts.Usage)
-		postLoadFunc = func() { v = viper.GetInt(opts.Name) }
+		postLoadFunc = func() { val.SetUint(a.Viper.GetUint64(opts.Name)) }
 
 	case "uint8":
 		flagSet.Uint8Var(v.(*uint8), opts.Name, opts.DefaultValue.(uint8), opts.Usage)
-		postLoadFunc = func() { v = uint8(viper.GetUint(opts.Name)) }
+		postLoadFunc = func() { val.SetUint(a.Viper.GetUint64(opts.Name)) }
 
 	case "uint16":
 		flagSet.Uint16Var(v.(*uint16), opts.Name, opts.DefaultValue.(uint16), opts.Usage)
-		postLoadFunc = func() { v = uint16(viper.GetUint(opts.Name)) }
+		postLoadFunc = func() { val.SetUint(a.Viper.GetUint64(opts.Name)) }
 
 	case "uint32":
 		flagSet.Uint32Var(v.(*uint32), opts.Name, opts.DefaultValue.(uint32), opts.Usage)
-		postLoadFunc = func() { v = viper.GetUint32(opts.Name) }
+		postLoadFunc = func() { val.SetUint(a.Viper.GetUint64(opts.Name)) }
 
 	case "uint64":
 		flagSet.Uint64Var(v.(*uint64), opts.Name, opts.DefaultValue.(uint64), opts.Usage)
-		postLoadFunc = func() { v = viper.GetUint64(opts.Name) }
+		postLoadFunc = func() { val.SetUint(a.Viper.GetUint64(opts.Name)) }
 
 	case "net.IP":
 		flagSet.IPVar(v.(*net.IP), opts.Name, opts.DefaultValue.(net.IP), opts.Usage)
 		postLoadFunc = func() {
-			ipString := viper.GetString(opts.Name)
+			ipString := a.Viper.GetString(opts.Name)
 			v = net.ParseIP(ipString)
 		}
 
 	case "string":
 		flagSet.StringVar(v.(*string), opts.Name, opts.DefaultValue.(string), opts.Usage)
-		postLoadFunc = func() { v = viper.Get(opts.Name).(string) }
+		postLoadFunc = func() { val.SetString(a.Viper.GetString(opts.Name)) }
 
 	case "[]string":
+		// TODO validate with environment var
 		flagSet.StringSliceVar(v.(*[]string), opts.Name, opts.DefaultValue.([]string), opts.Usage)
-		postLoadFunc = func() { v = viper.GetStringSlice(opts.Name) }
+		postLoadFunc = func() { v = a.Viper.GetStringSlice(opts.Name) }
 
 	case "time.Duration":
 		flagSet.DurationVar(v.(*time.Duration), opts.Name, opts.DefaultValue.(time.Duration), opts.Usage)
-		postLoadFunc = func() { v = viper.GetDuration(opts.Name) }
+		postLoadFunc = func() { v = a.Viper.GetDuration(opts.Name) }
 
 	case "[]time.Duration":
 		flagSet.DurationSliceVar(v.(*[]time.Duration), opts.Name, opts.DefaultValue.([]time.Duration), opts.Usage)
 		postLoadFunc = func() {
 			// Format of: [durationString,durationString]
-			durationSliceAsString := viper.GetString(opts.Name)
+			durationSliceAsString := a.Viper.GetString(opts.Name)
 			// Remove the brackets and split on the commas
 			durationStrings := strings.Split(durationSliceAsString[1:len(durationSliceAsString)-1], ",")
 			// Populate our slice with the duration values
@@ -178,18 +187,23 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 	a.postLoadFuncs = append(a.postLoadFuncs, postLoadFunc)
 
 	// Bind the cobra flag to Viper for configuration file and environment mapping
-	viper.BindPFlag(opts.Name, flagSet.Lookup(opts.Name))
+	a.Viper.BindPFlag(opts.Name, flagSet.Lookup(opts.Name))
+	a.Viper.BindEnv(opts.Name)
 }
 
 func (a *App) Init(pathToConfigFile, configName string) {
 	cobra.OnInitialize(a.initConfig(pathToConfigFile, configName))
 }
 
+func (a *App) InitNoConfig() {
+	cobra.OnInitialize(a.init)
+}
+
 func (a *App) initConfig(pathToConfigFile, configName string) func() {
 	return func() {
 		if pathToConfigFile != "" {
 			// Use config file from the flag.
-			viper.SetConfigFile(pathToConfigFile)
+			a.Viper.SetConfigFile(pathToConfigFile)
 		} else {
 			// Find home directory for config
 			home, err := homedir.Dir()
@@ -199,20 +213,28 @@ func (a *App) initConfig(pathToConfigFile, configName string) func() {
 			}
 
 			// Search config in home directory with name ".nrf-go" (without extension).
-			viper.AddConfigPath(home)
-			viper.SetConfigName(configName)
+			a.Viper.AddConfigPath(home)
+			a.Viper.SetConfigName(configName)
 		}
 
-		// Allow any environment variables to match
-		viper.AutomaticEnv()
 		// If a config file is found, read it in.
-		if err := viper.ReadInConfig(); err == nil {
-			fmt.Println("Using config file:", viper.ConfigFileUsed())
+		err := a.Viper.ReadInConfig()
+		if err == nil {
+			fmt.Println("Using config file:", a.Viper.ConfigFileUsed())
 		}
-		// Now we have our config, override the things
-		for _, fn := range a.postLoadFuncs {
-			fn()
-		}
+
+		a.init()
+	}
+}
+
+func (a *App) init() {
+	err := a.Viper.BindPFlags(a.Cmd.Flags())
+	if err != nil {
+		panic(err)
+	}
+	// Now we have our config, override the things
+	for _, fn := range a.postLoadFuncs {
+		fn()
 	}
 }
 

@@ -2,10 +2,12 @@ package ezcli
 
 type varOptFn func(*VarOpts)
 
+// VarOpts are the available behaviours that can be applied to each command option
 type VarOpts struct {
-	Name         string
-	DefaultValue any
-	Usage        string
+	Name         string // Name of the command eg: verbose will be --verbose
+	ShortName    string // Shorthand name eg: -v for --verbose
+	DefaultValue any    // Defaults to the nil value of the type
+	Usage        string //
 	Persistent   bool   // Option will persist to sub-commands
 	Env          string // If not "" - will
 }

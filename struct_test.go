@@ -1,6 +1,7 @@
 package ezcli
 
 import (
+	"os"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -12,7 +13,7 @@ func TestApp_StructVar(t *testing.T) {
 		String         string `flag:"custom" env:""`
 		Bool           bool   `flag:""`
 		Int            int    `env:""`
-		UInt           uint
+		UInt           uint   `env:""`
 		InnerNoPointer struct {
 			InnerStr string
 		}
@@ -24,6 +25,12 @@ func TestApp_StructVar(t *testing.T) {
 		unexported: "untouched",
 		Int:        1337,
 		Bool:       true,
+	}
+	// Set the environment variable to override
+	err := os.Setenv("UINT", "7331")
+	if err != nil {
+		t.Error(err)
+		return
 	}
 
 	app := New(&cobra.Command{
@@ -51,6 +58,9 @@ func TestApp_StructVar(t *testing.T) {
 	}
 	if s.Int != 1337 {
 		t.Errorf("expected default value '%d' got '%d'\n", 1337, s.Int)
+	}
+	if s.UInt != 7331 {
+		t.Errorf("expected UINT value from environment '%d' got '%d'\n", 7331, s.UInt)
 	}
 	if s.String != "teststring" {
 		t.Errorf("expected '%s' got '%s'\n", "teststring", s.String)
