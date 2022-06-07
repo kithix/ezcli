@@ -1,6 +1,7 @@
 package ezcli
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -190,11 +191,18 @@ func TestApp_FromEnvAndFlag(t *testing.T) {
 }
 
 func TestApp_FromConfig(t *testing.T) {
-	// TODO
+	config := []byte("{}")
+	app := subject()
+	err := app.Viper.ReadConfig(bytes.NewReader(config))
+	if err != nil {
+		t.Error(err)
+		return
+	}
 }
 
 func TestApp_VarsThatPanic(t *testing.T) {
 	// Type aliases
+	// It is likely possible to custom types
 	type StringAlias string
 	assertPanics[StringAlias](t, gVarTest("testStringAlias", "", StringAlias("testStringAlias")))
 }

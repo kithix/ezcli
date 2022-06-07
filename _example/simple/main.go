@@ -35,12 +35,10 @@ var app = ezcli.New(&cobra.Command{
 	Run:   Do,
 })
 
-func init() {
+func main() {
 	app.StructVar(appArgs)
 	app.InitNoConfig()
-}
 
-func main() {
 	err := app.Execute()
 	if err != nil {
 		log.Fatal(err)
