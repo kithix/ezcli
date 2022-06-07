@@ -158,9 +158,35 @@ func TestApp_FromEnv(t *testing.T) {
 	doGVarEnvTest[net.IP](t, "127.0.0.1", net.IPv4(127, 0, 0, 1))
 	doGVarEnvTest[net.IP](t, "ff02::1", net.IPv6linklocalallnodes)
 
-	// Slices
+	// Slices - not comma seperated
 	doGVarEnvTest[[]string](t, "s1 s2", []string{"s1", "s2"})
 	doGVarEnvTest[[]time.Duration](t, "5s 2h", []time.Duration{5 * time.Second, 2 * time.Hour})
+}
+
+func TestApp_FromEnvAndFlag(t *testing.T) {
+	// Single values
+	doGVarTest[bool](t, "false", "true", false)
+	doGVarTest[string](t, "flagString", "envString", "flagString")
+
+	doGVarTest[int](t, "1337", "7331", 1337)
+	doGVarTest[int8](t, "16", "61", 16)
+	doGVarTest[int16](t, "3200", "1234", 3200)
+	doGVarTest[int32](t, "5678123", "3218765", 5678123)
+	doGVarTest[int64](t, "1234567890", "9876543210", 1234567890)
+
+	doGVarTest[uint](t, "7331", "1337", 7331)
+	doGVarTest[uint8](t, "32", "23", 32)
+	doGVarTest[uint16](t, "2509", "9052", 2509)
+	doGVarTest[uint32](t, "8123567", "7652812", 8123567)
+	doGVarTest[uint64](t, "10987654321", "12345678901", 10987654321)
+
+	doGVarTest[time.Duration](t, "5s", "10h", 5*time.Second)
+	doGVarTest[net.IP](t, "127.0.0.1", "1.2.3.4", net.IPv4(127, 0, 0, 1))
+	doGVarTest[net.IP](t, "ff02::1", "ab:cd:ef:12:34:56:78::90", net.IPv6linklocalallnodes)
+
+	// Slices
+	doGVarTest[[]string](t, "s1,s2", "first second", []string{"s1", "s2"})
+	doGVarTest[[]time.Duration](t, "5s,2h", "6m 3ms", []time.Duration{5 * time.Second, 2 * time.Hour})
 }
 
 func TestApp_FromConfig(t *testing.T) {
