@@ -2,6 +2,7 @@ package ezcli
 
 import (
 	"reflect"
+	"strings"
 )
 
 const (
@@ -12,20 +13,23 @@ const (
 func (a *App) parseTags(field reflect.StructField) []varOptFn {
 	varOptFns := make([]varOptFn, 0)
 
+	flagVal, exists := field.Tag.Lookup(tagFlag)
+	// Currently flags are always set
+	_ = exists
+	if flagVal == "" {
+		flagVal = field.Name
+	}
+	// default to the field name if we have no value
+	varOptFns = append(varOptFns, VarName(flagVal))
+
 	envVal, exists := field.Tag.Lookup(tagEnv)
 	if exists {
-		// Use the field name if there was no custom name provided
+		// Use the same name as the flag if no custom name provided
+		// Will automatically uppercase from the flag
 		if envVal == "" {
-			envVal = field.Name
+			envVal = strings.ToUpper(flagVal)
 		}
 		varOptFns = append(varOptFns, VarEnv(envVal))
-	}
-	flagVal, exists := field.Tag.Lookup(tagFlag)
-	if exists && flagVal != "" {
-		varOptFns = append(varOptFns, VarName(flagVal))
-	} else {
-		// default to the field name if we have no value
-		varOptFns = append(varOptFns, VarName(field.Name))
 	}
 
 	return varOptFns

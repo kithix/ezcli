@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/mitchellh/go-homedir"
@@ -141,42 +140,30 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 
 	case "net.IP":
 		flagSet.IPVar(v.(*net.IP), opts.Name, opts.DefaultValue.(net.IP), opts.Usage)
-		postLoadFunc = func() {
-			ipString := a.Viper.GetString(opts.Name)
-			v = net.ParseIP(ipString)
-		}
+		postLoadFunc = func() { val.Set(reflect.ValueOf(net.ParseIP(a.Viper.GetString(opts.Name)))) }
 
 	case "string":
 		flagSet.StringVar(v.(*string), opts.Name, opts.DefaultValue.(string), opts.Usage)
 		postLoadFunc = func() { val.SetString(a.Viper.GetString(opts.Name)) }
 
 	case "[]string":
-		// TODO validate with environment var
 		flagSet.StringSliceVar(v.(*[]string), opts.Name, opts.DefaultValue.([]string), opts.Usage)
-		postLoadFunc = func() { v = a.Viper.GetStringSlice(opts.Name) }
+		postLoadFunc = func() { val.Set(reflect.ValueOf(a.Viper.GetStringSlice(opts.Name))) }
 
 	case "time.Duration":
 		flagSet.DurationVar(v.(*time.Duration), opts.Name, opts.DefaultValue.(time.Duration), opts.Usage)
-		postLoadFunc = func() { v = a.Viper.GetDuration(opts.Name) }
+		postLoadFunc = func() { val.Set(reflect.ValueOf(a.Viper.GetDuration(opts.Name))) }
 
 	case "[]time.Duration":
 		flagSet.DurationSliceVar(v.(*[]time.Duration), opts.Name, opts.DefaultValue.([]time.Duration), opts.Usage)
 		postLoadFunc = func() {
-			// Format of: [durationString,durationString]
-			durationSliceAsString := a.Viper.GetString(opts.Name)
-			// Remove the brackets and split on the commas
-			durationStrings := strings.Split(durationSliceAsString[1:len(durationSliceAsString)-1], ",")
-			// Populate our slice with the duration values
-			durations := make([]time.Duration, len(durationStrings))
-			for i, durationString := range durationStrings {
-				d, err := time.ParseDuration(durationString)
-				if err != nil {
-					panic(err)
-				}
-				durations[i] = d
+			durations, err := parseDurationSlice(a.Viper.GetString(opts.Name))
+			if err != nil {
+				panic(err)
 			}
-			v = durations
+			val.Set(reflect.ValueOf(durations))
 		}
+
 	default:
 		// TODO how to handle aliases of base types?
 		// Should we even do this?
@@ -188,7 +175,9 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 
 	// Bind the cobra flag to Viper for configuration file and environment mapping
 	a.Viper.BindPFlag(opts.Name, flagSet.Lookup(opts.Name))
-	a.Viper.BindEnv(opts.Name)
+	if opts.Env != "" {
+		a.Viper.BindEnv(opts.Name, opts.Env)
+	}
 }
 
 func (a *App) Init(pathToConfigFile, configName string) {

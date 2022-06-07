@@ -3,9 +3,13 @@ package ezcli
 import (
 	"fmt"
 	"net"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/viper"
 
 	"github.com/spf13/cobra"
 )
@@ -27,17 +31,67 @@ func doGVarEnvTest[T any](t *testing.T, envValue string, val T) {
 	doGVarTest(t, "", envValue, val)
 }
 
+func createFriendlyName(s string) string {
+	s = strings.Replace(s, "[]", "SLICE_", -1)
+	s = strings.Replace(s, "/", "_", -1)
+	s = strings.Replace(s, ".", "_", -1)
+	s = strings.Replace(s, "#", "_", -1)
+	return s
+}
+
+func viperEnvTest(t *testing.T) {
+	v := viper.New()
+	// string
+	varname := "stringvar"
+	envname := "string_TEST"
+	expected := "teststring"
+	err := os.Setenv(envname, expected)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = v.BindEnv(varname, envname)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	got := v.GetString(varname)
+	if got != expected {
+		t.Errorf("got '%s' expected '%s'", got, expected)
+	}
+
+	// []string
+}
+
 func gVarTest[T any](flagValue, envValue string, val T) func(t *testing.T) {
 	return func(t *testing.T) {
 		name := t.Name()
+		envname := createFriendlyName(name)
+		// Mimic environment setting
+		err := os.Setenv(envname, envValue)
+		if err != nil {
+			t.Error("unable to set env", err)
+			return
+		}
+		// Clean-up after ourselves
+		defer os.Setenv(envname, "")
+		// Validate we set it and it matches
+		if os.Getenv(envname) != envValue {
+			t.Error("unable to retrieve value")
+			return
+		}
+
 		app := subject()
 		var testVar T
-		app.genericVar(&testVar, VarName(name))
 
-		// Mimic setting our flag from command line
-		app.Cmd.ParseFlags([]string{
-			fmt.Sprintf("--%s=%s", name, flagValue),
-		})
+		app.genericVar(&testVar, VarName(name), VarEnv(envname))
+
+		// Mimic setting our flag from command line if we have a flag value
+		if flagValue != "" {
+			app.Cmd.ParseFlags([]string{
+				fmt.Sprintf("--%s=%s", name, flagValue),
+			})
+		}
 
 		// Ensure the flag got created
 		flag := app.Cmd.PersistentFlags().Lookup(name)
@@ -51,12 +105,13 @@ func gVarTest[T any](flagValue, envValue string, val T) func(t *testing.T) {
 
 		// Ensure the values match as their type
 		if !reflect.DeepEqual(val, testVar) {
+			fmt.Printf("env:\"%s=%s\"\n", envname, envValue)
 			t.Errorf("Expected '%v' got '%v'", val, testVar)
 		}
 	}
 }
 
-func TestApp_Vars(t *testing.T) {
+func TestApp_FromFlag(t *testing.T) {
 	// Single values
 	doGVarFlagTest[bool](t, "true", true)
 	doGVarFlagTest[string](t, "testString", "testString")
@@ -83,7 +138,33 @@ func TestApp_Vars(t *testing.T) {
 }
 
 func TestApp_FromEnv(t *testing.T) {
-	// Do all the above tests but use environment instead
+	// Single values
+	doGVarEnvTest[bool](t, "true", true)
+	doGVarEnvTest[string](t, "testString", "testString")
+
+	doGVarEnvTest[int](t, "1337", 1337)
+	doGVarEnvTest[int8](t, "16", 16)
+	doGVarEnvTest[int16](t, "3200", 3200)
+	doGVarEnvTest[int32](t, "5678123", 5678123)
+	doGVarEnvTest[int64](t, "1234567890", 1234567890)
+
+	doGVarEnvTest[uint](t, "7331", 7331)
+	doGVarEnvTest[uint8](t, "32", 32)
+	doGVarEnvTest[uint16](t, "2509", 2509)
+	doGVarEnvTest[uint32](t, "8123567", 8123567)
+	doGVarEnvTest[uint64](t, "10987654321", 10987654321)
+
+	doGVarEnvTest[time.Duration](t, "5s", 5*time.Second)
+	doGVarEnvTest[net.IP](t, "127.0.0.1", net.IPv4(127, 0, 0, 1))
+	doGVarEnvTest[net.IP](t, "ff02::1", net.IPv6linklocalallnodes)
+
+	// Slices
+	doGVarEnvTest[[]string](t, "s1 s2", []string{"s1", "s2"})
+	doGVarEnvTest[[]time.Duration](t, "5s 2h", []time.Duration{5 * time.Second, 2 * time.Hour})
+}
+
+func TestApp_FromConfig(t *testing.T) {
+	// TODO
 }
 
 func TestApp_VarsThatPanic(t *testing.T) {

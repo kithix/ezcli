@@ -9,7 +9,7 @@ type VarOpts struct {
 	DefaultValue any    // Defaults to the nil value of the type
 	Usage        string //
 	Persistent   bool   // Option will persist to sub-commands
-	Env          string // If not "" - will
+	Env          string // If not "" - will bind the option to the environment variable
 }
 
 func defaultOpts() *VarOpts {
@@ -52,6 +52,7 @@ func VarLocal() varOptFn {
 	}
 }
 
+// VarEnv sets the exact environment variable name (case-sensitive) for the option
 func VarEnv(name string) varOptFn {
 	return func(opts *VarOpts) {
 		opts.Env = name
