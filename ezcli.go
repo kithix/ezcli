@@ -169,7 +169,7 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 					durationStrings = strings.Join(durationStringSlice, ",")
 				}
 			}
-			
+
 			durations, err := parseDurationSlice(durationStrings)
 			if err != nil {
 				panic(err)

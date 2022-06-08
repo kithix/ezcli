@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -39,35 +38,26 @@ func doGVarEnvAndFlagTest[T any](t *testing.T, flagValue, envValue string, val T
 	doGVarTest(t, flagValue, envValue, nil, val)
 }
 
-func createFriendlyName(s string) string {
-	s = strings.Replace(s, "[]", "SLICE_", -1)
-	s = strings.Replace(s, "/", "_", -1)
-	s = strings.Replace(s, ".", "_", -1)
-	s = strings.Replace(s, "#", "_", -1)
-	return s
-}
-
 func gVarTest[T any](flagValue, envValue string, configValue any, val T) func(t *testing.T) {
 	return func(t *testing.T) {
 		name := t.Name()
 		opts := []varOptFn{VarName(name)}
 
 		if envValue != "" {
-			envname := createFriendlyName(name)
 			// Mimic environment setting
-			err := os.Setenv(envname, envValue)
+			err := os.Setenv(name, envValue)
 			if err != nil {
 				t.Error("unable to set env", err)
 				return
 			}
 			// Clean-up after ourselves
-			defer os.Setenv(envname, "")
+			defer os.Setenv(name, "")
 			// Validate we set it and it matches
-			if os.Getenv(envname) != envValue {
+			if os.Getenv(name) != envValue {
 				t.Error("unable to retrieve value")
 				return
 			}
-			opts = append(opts, VarEnv(envname))
+			opts = append(opts, VarEnv(name))
 		}
 
 		app := subject()
