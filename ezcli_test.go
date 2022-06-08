@@ -2,6 +2,7 @@ package ezcli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -10,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/viper"
-
 	"github.com/spf13/cobra"
 )
 
@@ -19,17 +18,25 @@ func subject() *App {
 	return New(&cobra.Command{})
 }
 
-func doGVarTest[T any](t *testing.T, flagValue, envValue string, val T) {
+func doGVarTest[T any](t *testing.T, flagValue, envValue string, configValue any, val T) {
 	var testType T
-	t.Run(reflect.TypeOf(testType).String(), gVarTest(flagValue, envValue, val))
+	t.Run(reflect.TypeOf(testType).String(), gVarTest(flagValue, envValue, configValue, val))
 }
 
 func doGVarFlagTest[T any](t *testing.T, flagValue string, val T) {
-	doGVarTest(t, flagValue, "", val)
+	doGVarTest(t, flagValue, "", nil, val)
 }
 
 func doGVarEnvTest[T any](t *testing.T, envValue string, val T) {
-	doGVarTest(t, "", envValue, val)
+	doGVarTest(t, "", envValue, nil, val)
+}
+
+func doGVarConfigTest[T any](t *testing.T, configValue any, val T) {
+	doGVarTest(t, "", "", configValue, val)
+}
+
+func doGVarEnvAndFlagTest[T any](t *testing.T, flagValue, envValue string, val T) {
+	doGVarTest(t, flagValue, envValue, nil, val)
 }
 
 func createFriendlyName(s string) string {
@@ -40,52 +47,52 @@ func createFriendlyName(s string) string {
 	return s
 }
 
-func viperEnvTest(t *testing.T) {
-	v := viper.New()
-	// string
-	varname := "stringvar"
-	envname := "string_TEST"
-	expected := "teststring"
-	err := os.Setenv(envname, expected)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	err = v.BindEnv(varname, envname)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	got := v.GetString(varname)
-	if got != expected {
-		t.Errorf("got '%s' expected '%s'", got, expected)
-	}
-
-	// []string
-}
-
-func gVarTest[T any](flagValue, envValue string, val T) func(t *testing.T) {
+func gVarTest[T any](flagValue, envValue string, configValue any, val T) func(t *testing.T) {
 	return func(t *testing.T) {
 		name := t.Name()
-		envname := createFriendlyName(name)
-		// Mimic environment setting
-		err := os.Setenv(envname, envValue)
-		if err != nil {
-			t.Error("unable to set env", err)
-			return
-		}
-		// Clean-up after ourselves
-		defer os.Setenv(envname, "")
-		// Validate we set it and it matches
-		if os.Getenv(envname) != envValue {
-			t.Error("unable to retrieve value")
-			return
+		opts := []varOptFn{VarName(name)}
+
+		if envValue != "" {
+			envname := createFriendlyName(name)
+			// Mimic environment setting
+			err := os.Setenv(envname, envValue)
+			if err != nil {
+				t.Error("unable to set env", err)
+				return
+			}
+			// Clean-up after ourselves
+			defer os.Setenv(envname, "")
+			// Validate we set it and it matches
+			if os.Getenv(envname) != envValue {
+				t.Error("unable to retrieve value")
+				return
+			}
+			opts = append(opts, VarEnv(envname))
 		}
 
 		app := subject()
-		var testVar T
 
-		app.genericVar(&testVar, VarName(name), VarEnv(envname))
+		// Prepare our configuration if we have a value for one
+		if configValue != nil {
+			jsonVal, err := json.Marshal(configValue)
+			if err != nil {
+				t.Error("unable to turn value to json", val)
+				return
+			}
+			jsonConfBytes := []byte(fmt.Sprintf(
+				"{\"%s\":%s}", name, string(jsonVal),
+			))
+			app.Viper.SetConfigType("json")
+			err = app.Viper.ReadConfig(bytes.NewReader(jsonConfBytes))
+			if err != nil {
+				t.Error("unable to read config", err)
+				return
+			}
+			t.Log("Input Config:", string(jsonConfBytes))
+		}
+
+		var testVar T
+		app.genericVar(&testVar, opts...)
 
 		// Mimic setting our flag from command line if we have a flag value
 		if flagValue != "" {
@@ -102,11 +109,10 @@ func gVarTest[T any](flagValue, envValue string, val T) func(t *testing.T) {
 		}
 
 		// Initialise the application
-		app.initConfig(t.TempDir(), "doesntexist")()
+		app.InitNoConfig()
 
 		// Ensure the values match as their type
 		if !reflect.DeepEqual(val, testVar) {
-			fmt.Printf("env:\"%s=%s\"\n", envname, envValue)
 			t.Errorf("Expected '%v' got '%v'", val, testVar)
 		}
 	}
@@ -164,47 +170,83 @@ func TestApp_FromEnv(t *testing.T) {
 	doGVarEnvTest[[]time.Duration](t, "5s 2h", []time.Duration{5 * time.Second, 2 * time.Hour})
 }
 
-func TestApp_FromEnvAndFlag(t *testing.T) {
+func TestApp_FromConfig_JSON(t *testing.T) {
 	// Single values
-	doGVarTest[bool](t, "false", "true", false)
-	doGVarTest[string](t, "flagString", "envString", "flagString")
+	doGVarConfigTest[bool](t, true, true)
+	doGVarConfigTest[string](t, "testString", "testString")
 
-	doGVarTest[int](t, "1337", "7331", 1337)
-	doGVarTest[int8](t, "16", "61", 16)
-	doGVarTest[int16](t, "3200", "1234", 3200)
-	doGVarTest[int32](t, "5678123", "3218765", 5678123)
-	doGVarTest[int64](t, "1234567890", "9876543210", 1234567890)
+	doGVarConfigTest[int](t, 1337, 1337)
+	doGVarConfigTest[int8](t, 16, 16)
+	doGVarConfigTest[int16](t, 3200, 3200)
+	doGVarConfigTest[int32](t, 5678123, 5678123)
+	doGVarConfigTest[int64](t, 1234567890, 1234567890)
 
-	doGVarTest[uint](t, "7331", "1337", 7331)
-	doGVarTest[uint8](t, "32", "23", 32)
-	doGVarTest[uint16](t, "2509", "9052", 2509)
-	doGVarTest[uint32](t, "8123567", "7652812", 8123567)
-	doGVarTest[uint64](t, "10987654321", "12345678901", 10987654321)
+	doGVarConfigTest[uint](t, 7331, 7331)
+	doGVarConfigTest[uint8](t, 32, 32)
+	doGVarConfigTest[uint16](t, 2509, 2509)
+	doGVarConfigTest[uint32](t, 8123567, 8123567)
+	doGVarConfigTest[uint64](t, 10987654321, 10987654321)
 
-	doGVarTest[time.Duration](t, "5s", "10h", 5*time.Second)
-	doGVarTest[net.IP](t, "127.0.0.1", "1.2.3.4", net.IPv4(127, 0, 0, 1))
-	doGVarTest[net.IP](t, "ff02::1", "ab:cd:ef:12:34:56:78::90", net.IPv6linklocalallnodes)
+	doGVarConfigTest[time.Duration](t, "5s", 5*time.Second)
+	doGVarConfigTest[net.IP](t, "127.0.0.1", net.IPv4(127, 0, 0, 1))
+	doGVarEnvTest[net.IP](t, "ff02::1", net.IPv6linklocalallnodes)
 
 	// Slices
-	doGVarTest[[]string](t, "s1,s2", "first second", []string{"s1", "s2"})
-	doGVarTest[[]time.Duration](t, "5s,2h", "6m 3ms", []time.Duration{5 * time.Second, 2 * time.Hour})
+	doGVarConfigTest[[]string](t, []string{"s1", "s2"}, []string{"s1", "s2"})
+	doGVarConfigTest[[]time.Duration](t, []string{"5s", "2h"}, []time.Duration{5 * time.Second, 2 * time.Hour})
 }
 
-func TestApp_FromConfig(t *testing.T) {
-	config := []byte("{}")
+func TestApp_FromEnvAndFlag(t *testing.T) {
+	// Test that flags take priority over environment variables
+	// Single values
+	doGVarEnvAndFlagTest[bool](t, "false", "true", false)
+	doGVarEnvAndFlagTest[string](t, "flagString", "envString", "flagString")
+
+	doGVarEnvAndFlagTest[int](t, "1337", "7331", 1337)
+	doGVarEnvAndFlagTest[int8](t, "16", "61", 16)
+	doGVarEnvAndFlagTest[int16](t, "3200", "1234", 3200)
+	doGVarEnvAndFlagTest[int32](t, "5678123", "3218765", 5678123)
+	doGVarEnvAndFlagTest[int64](t, "1234567890", "9876543210", 1234567890)
+
+	doGVarEnvAndFlagTest[uint](t, "7331", "1337", 7331)
+	doGVarEnvAndFlagTest[uint8](t, "32", "23", 32)
+	doGVarEnvAndFlagTest[uint16](t, "2509", "9052", 2509)
+	doGVarEnvAndFlagTest[uint32](t, "8123567", "7652812", 8123567)
+	doGVarEnvAndFlagTest[uint64](t, "10987654321", "12345678901", 10987654321)
+
+	doGVarEnvAndFlagTest[time.Duration](t, "5s", "10h", 5*time.Second)
+	doGVarEnvAndFlagTest[net.IP](t, "127.0.0.1", "1.2.3.4", net.IPv4(127, 0, 0, 1))
+	doGVarEnvAndFlagTest[net.IP](t, "ff02::1", "ab:cd:ef:12:34:56:78::90", net.IPv6linklocalallnodes)
+
+	// Slices
+	doGVarEnvAndFlagTest[[]string](t, "s1,s2", "first second", []string{"s1", "s2"})
+	doGVarEnvAndFlagTest[[]time.Duration](t, "5s,2h", "6m 3ms", []time.Duration{5 * time.Second, 2 * time.Hour})
+}
+
+// TODO fuzz tests
+func TestApp_ManualFromConfig(t *testing.T) {
+	config := []byte("{\"name\":\"value\"}")
 	app := subject()
+	app.Viper.SetConfigType("json")
 	err := app.Viper.ReadConfig(bytes.NewReader(config))
 	if err != nil {
 		t.Error(err)
 		return
 	}
+	in := ""
+	app.StringVar(&in, "name", "default", "usage")
+	app.InitNoConfig()
+
+	if in != "value" {
+		t.Errorf("expected 'value' got '%s'", in)
+	}
 }
 
 func TestApp_VarsThatPanic(t *testing.T) {
 	// Type aliases
-	// It is likely possible to custom types
+	// TODO - it is likely possible to hanlde custom types, just needs investigation
 	type StringAlias string
-	assertPanics[StringAlias](t, gVarTest("testStringAlias", "", StringAlias("testStringAlias")))
+	assertPanics[StringAlias](t, gVarTest("testStringAlias", "", "", StringAlias("testStringAlias")))
 }
 
 func assertPanics[T any](t *testing.T, fn func(t *testing.T)) {

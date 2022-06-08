@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/mitchellh/go-homedir"
@@ -157,7 +158,19 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 	case "[]time.Duration":
 		flagSet.DurationSliceVar(v.(*[]time.Duration), opts.Name, opts.DefaultValue.([]time.Duration), opts.Usage)
 		postLoadFunc = func() {
-			durations, err := parseDurationSlice(a.Viper.GetString(opts.Name))
+			// Check for flag / env values - they're strings
+			durationStrings := a.Viper.GetString(opts.Name)
+			// If we didn't get anything, check it wasn't provided as a slice
+			if durationStrings == "" {
+				durationStringSlice := a.Viper.GetStringSlice(opts.Name)
+				if len(durationStringSlice) > 0 {
+					// Join to fit the interface
+					// This can be optimized
+					durationStrings = strings.Join(durationStringSlice, ",")
+				}
+			}
+			
+			durations, err := parseDurationSlice(durationStrings)
 			if err != nil {
 				panic(err)
 			}
@@ -181,17 +194,18 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 }
 
 func (a *App) Init(pathToConfigFile, configName string) {
-	cobra.OnInitialize(a.initConfig(pathToConfigFile, configName))
+	a.initConfig(pathToConfigFile, configName)
 }
 
 func (a *App) InitNoConfig() {
-	cobra.OnInitialize(a.init)
+	a.init()
 }
 
 func (a *App) initConfig(pathToConfigFile, configName string) func() {
 	return func() {
 		if pathToConfigFile != "" {
-			// Use config file from the flag.
+			// TODO
+			// This is where we'd look for a flag with the config path
 			a.Viper.SetConfigFile(pathToConfigFile)
 		} else {
 			// Find home directory for config
@@ -217,11 +231,6 @@ func (a *App) initConfig(pathToConfigFile, configName string) func() {
 }
 
 func (a *App) init() {
-	err := a.Viper.BindPFlags(a.Cmd.Flags())
-	if err != nil {
-		panic(err)
-	}
-	// Now we have our config, override the things
 	for _, fn := range a.postLoadFuncs {
 		fn()
 	}

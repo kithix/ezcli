@@ -8,6 +8,9 @@ import (
 )
 
 func parseDurationSlice(s string) ([]time.Duration, error) {
+	if len(s) == 0 {
+		return []time.Duration{}, nil
+	}
 	// Flag format of: "[durationString,durationString]"
 	// Env format of: "durationString durationString"
 
