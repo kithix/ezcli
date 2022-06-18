@@ -1,5 +1,29 @@
 package ezcli
 
+type appOptFn func(*AppOpts)
+
+type AppOpts struct {
+	useConfig bool
+	envPrefix string
+}
+
+func defaultAppOpts() *AppOpts {
+	return &AppOpts{}
+}
+
+func AppUseConfig() appOptFn {
+	return func(opts *AppOpts) {
+		opts.useConfig = true
+	}
+
+}
+
+func AppEnvPrefix(prefix string) appOptFn {
+	return func(opts *AppOpts) {
+		opts.envPrefix = prefix
+	}
+}
+
 type varOptFn func(*VarOpts)
 
 // VarOpts are the available behaviours that can be applied to each command option
@@ -12,13 +36,13 @@ type VarOpts struct {
 	Env          string // If not "" - will bind the option to the environment variable
 }
 
-func defaultOpts() *VarOpts {
+func defaultVarOpts() *VarOpts {
 	return &VarOpts{
 		Persistent: true,
 	}
 }
 
-func WithOptions(newOpts *VarOpts) varOptFn {
+func VarUseOptions(newOpts *VarOpts) varOptFn {
 	return func(opts *VarOpts) {
 		// Overwrite the value of incoming options
 		*opts = *newOpts

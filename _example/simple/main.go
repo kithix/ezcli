@@ -33,6 +33,7 @@ var app = ezcli.New(&cobra.Command{
 	Use:   "printme",
 	Short: "print some stuff",
 	Run:   Do,
+	Args:  cobra.MinimumNArgs(1),
 })
 
 func main() {

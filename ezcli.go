@@ -56,7 +56,7 @@ func (a *App) Var(variable any, name string, value any, usage string) {
 
 func (a *App) genericVar(v any, optFns ...varOptFn) {
 	// Setup our variable options
-	opts := defaultOpts()
+	opts := defaultVarOpts()
 	for _, optFn := range optFns {
 		optFn(opts)
 	}
@@ -194,6 +194,7 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 }
 
 func (a *App) Init(pathToConfigFile, configName string) {
+	// TODO determine if we need to find/use a configuration file
 	a.initConfig(pathToConfigFile, configName)
 }
 
