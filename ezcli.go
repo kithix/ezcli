@@ -17,6 +17,7 @@ type App struct {
 	Cmd           *cobra.Command
 	Viper         *viper.Viper
 	postLoadFuncs []func()
+	children      []*App
 }
 
 func New(cmd *cobra.Command) *App {
@@ -24,6 +25,7 @@ func New(cmd *cobra.Command) *App {
 		Cmd:           cmd,
 		Viper:         viper.New(),
 		postLoadFuncs: make([]func(), 0),
+		children:      make([]*App, 0),
 	}
 
 	return a
@@ -31,6 +33,7 @@ func New(cmd *cobra.Command) *App {
 
 func (a *App) Child(child *App) *App {
 	a.Cmd.AddCommand(child.Cmd)
+	a.children = append(a.children, child)
 	return child
 }
 
@@ -97,7 +100,9 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 	// TODO Could we and should we allow type aliases from users?
 	case "bool":
 		flagSet.BoolVar(v.(*bool), opts.Name, opts.DefaultValue.(bool), opts.Usage)
-		postLoadFunc = func() { val.SetBool(a.Viper.GetBool(opts.Name)) }
+		postLoadFunc = func() {
+			val.SetBool(a.Viper.GetBool(opts.Name))
+		}
 
 	case "int":
 		flagSet.IntVar(v.(*int), opts.Name, opts.DefaultValue.(int), opts.Usage)
@@ -195,10 +200,12 @@ func (a *App) genericVar(v any, optFns ...varOptFn) {
 
 func (a *App) Init(pathToConfigFile, configName string) {
 	// TODO determine if we need to find/use a configuration file
+	// Set our state after the command executes
 	a.initConfig(pathToConfigFile, configName)
 }
 
 func (a *App) InitNoConfig() {
+	// Set our state after the command executes
 	a.init()
 }
 
@@ -224,6 +231,7 @@ func (a *App) initConfig(pathToConfigFile, configName string) func() {
 		// If a config file is found, read it in.
 		err := a.Viper.ReadInConfig()
 		if err == nil {
+			// TODO use log
 			fmt.Println("Using config file:", a.Viper.ConfigFileUsed())
 		}
 
@@ -232,11 +240,18 @@ func (a *App) initConfig(pathToConfigFile, configName string) func() {
 }
 
 func (a *App) init() {
+	// Run our post load functions
 	for _, fn := range a.postLoadFuncs {
 		fn()
+	}
+	// Run every childs post load
+	for _, child := range a.children {
+		child.init()
 	}
 }
 
 func (a *App) Execute() error {
+	// Queue up our initialize functions to run when cobra starts
+	cobra.OnInitialize(a.init)
 	return a.Cmd.Execute()
 }

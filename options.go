@@ -7,10 +7,6 @@ type AppOpts struct {
 	envPrefix string
 }
 
-func defaultAppOpts() *AppOpts {
-	return &AppOpts{}
-}
-
 func AppUseConfig() appOptFn {
 	return func(opts *AppOpts) {
 		opts.useConfig = true
